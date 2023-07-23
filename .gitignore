@@ -1,0 +1,5 @@
+
+aws-thumbnail-generator/node_modules/.bin/crc32
+*.cmd
+aws-thumbnail-generator/node_modules/.bin/crc32.ps1
+node_modules
