@@ -1,2 +1,1 @@
-# AWS-serverless
- 
+# AWS hands on using serverless framework
