@@ -11,8 +11,8 @@ import json
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb', region_name=str(os.environ['REGION_NAME']))
 
-size = int(os.getenv["THUMBNAIL_SIZE"]))
-dbtable = str(os.environ['DYNAMODB_TABLE'])
+size = int(os.getenv("THUMBNAIL_SIZE"))
+dbtable = str(os.getenv('DYNAMODB_TABLE'))
 # Generating thumbnail images from S3 bucket as they are added
 def s3_thumbnail_generator(event, context):
     # parse event
@@ -32,6 +32,8 @@ def s3_thumbnail_generator(event, context):
 
         url = upload_to_s3(bucket, thumbnail_key, thumbnail, img_size)
 
+        # Saving url to dynamodb
+        s3_save_url_to_dynamodb(url_path=url, img_size=img_size)
         return url
 
 def get_s3_image(bucket, key):
@@ -92,3 +94,59 @@ def s3_save_url_to_dynamodb(url_path, img_size):
         'body': json.dumps(response)
     }
 
+def s3_get_thumbnail_urls(event, context):
+    table = dynamodb.Table(dbtable)
+    response = table.scan()
+    data = response['Items']
+    
+    # Paginate through results in a loop 
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        data.extend(response['Items'])
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(data),
+    }
+
+
+def s3_get_item(event, context):
+    table = dynamodb.Table(dbtable)
+    response = table.get_item(
+        Key={
+            'id': event['pathParameters']['id']
+        } 
+    )
+    item = response['Item']
+    return {
+        'statusCode': 200,
+        'headers': {'ContentType': 'application/json', 'Access-Control-Allow-Origin': '*'},
+        'body': json.dumps(item),
+        'isBase64Encoded': False,
+    }
+
+def s3_delete_item(event, context):
+    table = dynamodb.Table(dbtable)
+    item_id = event['pathParameters']['id']
+    
+    response = {
+        'statusCode': 500,
+        'body': f"Error occured while deleting post {item_id}"
+    }
+    
+    delete_response = table.delete_item(Key={
+        'id': item_id
+    }) 
+    
+    all_good_response = {
+        "deleted": True,
+        "itemDeletedId": item_id
+    }
+    
+    if delete_response['ResponseMetadata']['HTTPStatusCode'] == 200:
+        response = {
+            'statusCode': 200,
+           'headers': {'ContentType': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps(all_good_response)
+        }
+    return response
